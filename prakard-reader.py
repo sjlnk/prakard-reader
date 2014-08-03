@@ -41,6 +41,13 @@ if __name__ == "__main__":
     if os.path.isfile("condodata.p"):
         condodict = pickle.load(open('condodata.p', 'rb'))
 
+    ignorelist = []
+    if os.path.isfile('ignore.txt'):
+        with open('ignore.txt', 'r') as ignorefile:
+            ignorelist = ignorefile.readlines()
+            for i in range(len(ignorelist)):
+                ignorelist[i] = ignorelist[i].strip()
+
     for site in sites:
 
         logging.debug("Downloading {} ...".format(site))
@@ -79,12 +86,13 @@ if __name__ == "__main__":
 
         thisdict = condodict[condono]
 
-        new_threads = []
+        new_topics = []
 
         for topic in topics:
 
             if not re_rent.search(topic):
                 continue
+
             header_start_res = re_topic_header_start.search(topic)
             linkarea_start = header_start_res.start()
             header_start = header_start_res.end()
@@ -101,29 +109,32 @@ if __name__ == "__main__":
             thread_end = threadarea.end()
             thread = int(topic[thread_start:thread_end])
 
-            if thread in thisdict:
+            if topic_starter in ignorelist:
+                continue
+            if header in thisdict:
                 continue
 
-            thisdict[thread] = {'header': header, "thread_starter": topic_starter, "href": href,
+            thisdict[header] = {'header': header, "thread_starter": topic_starter, "href": href,
                                 "date_added": az.utcnow()}
-            new_threads.append(thread)
+            new_topics.append(header)
 
-        if new_threads:
-            logging.info("\n*New threads*")
-            for thread in new_threads:
-                logging.info('\n' + topic_dict_to_string(thisdict[thread]))
+        if new_topics:
+            logging.info("\n*New topics*")
+            for header in new_topics:
+                logging.info('\n' + topic_dict_to_string(thisdict[header]))
 
-        threads_to_show = pd.Series()
+        topics_to_show = pd.Series()
         cutoffdate = az.utcnow() - timedelta(hours=args.cutoffhours)
-        for thread, tdict in thisdict.items():
-            if tdict['date_added'] > cutoffdate and thread not in new_threads:
-                threads_to_show[tdict['date_added']] = thread
-        threads_to_show.sort_index()
+        for header, tdict in thisdict.items():
+            if tdict['date_added'] > cutoffdate and header not in new_topics \
+                    and tdict['thread_starter'] not in ignorelist:
+                topics_to_show[tdict['date_added']] = header
+        topics_to_show.sort_index()
 
-        if not threads_to_show.empty:
-            logging.info("\n*Threads in the last {} hours:*".format(args.cutoffhours))
-            for thread in threads_to_show:
-                logging.info('\n' + topic_dict_to_string(thisdict[thread]))
+        if not topics_to_show.empty:
+            logging.info("\n*Topics in the last {} hours:*".format(args.cutoffhours))
+            for header in topics_to_show:
+                logging.info('\n' + topic_dict_to_string(thisdict[header]))
 
     pickle.dump(condodict, open('condodata.p', 'wb'))
 
